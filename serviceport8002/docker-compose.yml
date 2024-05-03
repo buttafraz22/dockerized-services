@@ -1,0 +1,50 @@
+version: '3'
+services:
+  db:
+    image: mysql:8.0.36
+    container_name: database
+    restart: always
+    volumes:
+      - data:/var/lib/mysql
+    environment:
+      - MYSQL_HOST=localhost # Proxy for MySQL server on local machine
+      - MYSQL_PORT=3306  # cannot change this port to other number
+      - MYSQL_ROOT_HOST=% # Allow connections from anywhere
+      - MYSQL_DATABASE=emailservice
+      # - MYSQL_PASSWORD=1234
+      - MYSQL_ROOT_PASSWORD=1234
+    command: --bind-address=0.0.0.0
+    ports:
+      - 33068:3306  # Port Forwarding from XPORT to PORT 3306 on Local Machine.
+    healthcheck:
+      test: ["CMD", "mysql", "-h", "localhost", "-u", "root", "-p1234", "-e", "SELECT 1"]
+      timeout: 20s
+      retries: 10
+  
+  backend:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    container_name: backend
+    command: sh -c "python3 manage.py migrate --noinput && python3 manage.py collectstatic --noinput && python manage.py runserver 0.0.0.0:8001"
+    restart: always
+    volumes:
+      - .:/app
+    ports:
+      - "8002:8002"
+    env_file:
+      - .env
+    depends_on:
+      - db
+  
+  queue:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    command: 'python consumer.py'
+    depends_on:
+      - db
+    links: 
+      - db
+volumes:
+  data:
